@@ -2,16 +2,13 @@
 
 """
 Batch conversion of audio files
-  - evolution of "convert.py" script
   - put files in the folders: [2wav, 2mp3, 2flac] and run this script
   - contents of those folders will be converted to their respective formats
-  - sets tags based on folder heirarchy and filename:
+  - sets tags in target mp3 files using 2 mechanisms
+     - embedded in the source file (takes precedence)
+     - from the filepath folder heirarchy and filename:
         genre/artist/year-album/track_title
-    OR can copy tags from input file (only useful for flac->mp3)
-        specify '-tif' option
-  - place jpeg image file in folder to embed
-  - or sets tags from input file name (when outputting MP3s)
-        -tif option
+  - place jpeg image file in folder to embed (for mp3 only)
 
 Usage:
     ./2convert.py preview
@@ -25,8 +22,8 @@ Requirements:
   - ffmpeg (mp3->wav) (alternative)
 
 TODO: 
+- move source files after conversion to folder: 'done'
 - print n/M progress
-- option to delete source file after conversion
 """
 
 import sys, os
