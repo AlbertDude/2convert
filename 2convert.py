@@ -109,12 +109,13 @@ def get_tag_info_from_path(path, src_folder): #{
                 are the 3 valid subfolder arrangements
     """
 
-    text_pattern = r"([a-zA-Z _\d.()']+)"
+    text_pattern      = r"([a-zA-Z _\d.()']+)"
+    text_dash_pattern = r"([a-zA-Z _\d.()'-]+)"
     def parse2(s, field1_name, field2_name): #{
         numeric_pattern = r"([\d]+)"
         sep_pattern     = r"[- _.]+"
         info = {}
-        m = re.match(numeric_pattern+sep_pattern+text_pattern, s)
+        m = re.match(numeric_pattern+sep_pattern+text_dash_pattern, s)
         if m is not None:
             info[field1_name] = m.group(1)
             info[field2_name] = m.group(2)
