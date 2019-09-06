@@ -32,6 +32,7 @@ import subprocess
 import time
 import re
 import argparse
+import shutil
 import multiprocessing as MP
 from multiprocessing.pool import ThreadPool
 
@@ -328,6 +329,22 @@ def process_case( (path, fcn, options, preview, img_file) ): #{
     """ Wrapper to facilitate multi-thread implementation
     """
     fcn( path, preview=preview, img_file=img_file )
+    # move source file to done folder (keeping folder heirarchy)
+    remaining = os.path.dirname(path)
+    while remaining:
+        remaining, folder = os.path.split(remaining)
+
+    dest_path = os.path.join('done', path.split(folder+'/')[1])
+    if preview:
+        print "MOVE:", path, '-->\n     ', dest_path
+    else:
+        dest_folder = os.path.dirname(dest_path)
+        try:
+            os.makedirs(dest_folder)
+        except OSError:
+            if not os.path.isdir(dest_folder):
+                raise
+        shutil.move(path, dest_path)
 #}
 
 USE_MULTIPLE_THREADS = True
