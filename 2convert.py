@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 """
 Batch conversion of audio files
@@ -22,7 +22,6 @@ Requirements:
   - ffmpeg (mp3->wav) (alternative)
 
 TODO: 
-- move source files after conversion to folder: 'done'
 - print n/M progress
 """
 
@@ -60,7 +59,7 @@ def _all_files(path, ext_list=None): #{
     try:
         node = glob.glob( fix_path )[0]  
     except:
-        print "\nERROR: Unable to open: " + fix_path
+        print("\nERROR: Unable to open: " + fix_path)
         sys.exit(2)
     if os.path.isfile(node):
         if ext_list:
@@ -85,13 +84,13 @@ def check_subprocess_status(cmd, process): #{
     if process.returncode != 0:
         from inspect import currentframe, getframeinfo
         frame = currentframe().f_back
-        print
-        print "FILE:", getframeinfo(frame).filename
-        print "LINE:", frame.f_lineno
-        print "External command failed:", cmd
-        print "Return code:", process.returncode
-        print "Stdout:\n", pout
-        print "Stderr:\n", perr
+        print()
+        print("FILE:", getframeinfo(frame).filename)
+        print("LINE:", frame.f_lineno)
+        print("External command failed:", cmd)
+        print("Return code:", process.returncode)
+        print("Stdout:\n", pout)
+        print("Stderr:\n", perr)
         return False
     return True
 #}
@@ -124,7 +123,7 @@ def get_tag_info_from_path(path, src_folder): #{
             if m is not None:
                 info[field2_name] = m.group(1)
             else:
-                print "Can't parse %s from foldername:"%field2_name, s
+                print("Can't parse %s from foldername:"%field2_name, s)
         return info
     #}
     def parse1(s, field_name): #{
@@ -133,7 +132,7 @@ def get_tag_info_from_path(path, src_folder): #{
         if m is not None:
             info[field_name] = m.group(1)
         else:
-            print "Can't parse %s from foldername:"%field_name, s
+            print("Can't parse %s from foldername:"%field_name, s)
         return info
     #}
 
@@ -198,7 +197,7 @@ def get_tag_info_from_file(path): #{
 
     tag_info = {}
     process_comments = False
-    lines = pout.split('\n')
+    lines = pout.decode("utf-8").split('\n')
     for line in lines:
         if process_comments:
             m = re.match(r"([a-zA-Z_]+)=([a-zA-Z _\d.()'-]+)", line)
@@ -228,7 +227,7 @@ def to_mp3(path, options=[], preview=False, img_file=None): #{
     tag_info = get_tag_info_from_file(path)
     # extract tags from filepath
     addtl_tags = get_tag_info_from_path(path, '2mp3')
-    for k, v in addtl_tags.iteritems():
+    for k, v in addtl_tags.items():
         if k not in tag_info:
             tag_info[k] = v
 
@@ -241,7 +240,7 @@ def to_mp3(path, options=[], preview=False, img_file=None): #{
         'GENRE': '--tg',
         }
     tag_options = []
-    for k, v in tag_info.iteritems():
+    for k, v in tag_info.items():
         if k in tag_lookup:
             tag_options.extend( [tag_lookup[k], v] )
     if img_file :
@@ -271,7 +270,7 @@ def to_wav(path, options=[], preview=False, img_file=None): #{
     elif ext.lower() == '.wav': # already a wave file
         pass
     else:
-        print "Don't know how to handle filetype (%s): %s"%(ext,path)
+        print("Don't know how to handle filetype (%s): %s"%(ext,path))
 
     if cmd:
         sys.stdout.write( "-> WAV: " + path + "\n" )
@@ -283,6 +282,55 @@ def to_wav(path, options=[], preview=False, img_file=None): #{
     return True
 #}
 
+def flac_to_flac(path, options=[], preview=False, img_file=None): #{
+    """ Re-encode flac file
+        why? -- some flac files cause LAME front-end to decode to noise
+        - not sure what the exact cause is
+        - just know that a flac re-encode seems to fix it
+        This could be a one line flac command but 
+        - it turns out that old flac files that use ID3v2 tags cause an error with the one line flac command.
+        So instead, original flac is decoded to temp wav file which is then re-encoded
+        - additionally try to extract and transfer tags
+        Since both the original and new flac will exist in the same folder temporarily, the original
+        file is renamed first and the new file will be written
+        folder
+    """
+    # Decode original flac to temp wav file
+    import uuid
+    temp_wav_filename = str(uuid.uuid4()) + ".wav"
+    cmd=['flac', '-d', path, '-o', temp_wav_filename]
+    if not preview:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        status = check_subprocess_status(cmd, p)
+    else:
+        sys.stdout.write( "  " + str(cmd) + "\n" )
+        #sys.stdout.write( "  " + str(tag_info) + "\n" )
+
+    # Get tag_info from original flac
+    tag_info = get_tag_info_from_file(path)
+
+    # Encode temp wav file to new flac file
+    sys.stdout.write( "->FLAC: " + path + "\n" )
+    default_options=['-8', '--replay-gain']
+    tag_options = []
+    for k, v in tag_info.items():
+        tag_options.append( '--tag=%s=%s'%(k, v) )
+    new_flac_name = os.path.splitext(path)[0] + '_.flac'
+    cmd=['flac'] + default_options + tag_options + options + [temp_wav_filename, '-o', new_flac_name]
+    if not preview:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        status = check_subprocess_status(cmd, p)
+    else:
+        sys.stdout.write( "  " + str(cmd) + "\n" )
+        #sys.stdout.write( "  " + str(tag_info) + "\n" )
+
+    # Delete temp wav file
+    if not preview:
+        os.remove(temp_wav_filename)
+    else:
+        sys.stdout.write( "  deleting temp wav file:" + temp_wav_filename + "\n" )
+#}
+
 def to_flac(path, options=[], preview=False, img_file=None): #{
     """ Convert input wave file to flac
         default command:
@@ -291,14 +339,23 @@ def to_flac(path, options=[], preview=False, img_file=None): #{
         - since only .wav files should be converted to flac, there are no embedded tags available
     """
     assert os.path.isfile(path)
-    assert os.path.splitext(path)[1].lower() != '.mp3'  # don't convert MP3s to flac...
-    if os.path.splitext(path)[1].lower() != '.wav':  # skip non-wav files
+
+    ext = os.path.splitext(path)[1].lower()
+
+    assert ext != '.mp3'  # don't convert MP3s to flac...
+
+    # re-encode flac?
+    if ext == '.flac':
+        return flac_to_flac(path, options, preview, img_file)
+
+    # encode wav
+    if ext != '.wav':  # skip non-wav files
         return True
     sys.stdout.write( "->FLAC: " + path + "\n" )
     default_options=['-8', '--replay-gain']
     tag_info = get_tag_info_from_path(path, '2flac')
     tag_options = []
-    for k, v in tag_info.iteritems():
+    for k, v in tag_info.items():
         tag_options.append( '--tag=%s=%s'%(k, v) )
     cmd=['flac'] + default_options + tag_options + options + [path]
     if not preview:
@@ -326,9 +383,10 @@ class FuncWrapper:
         return self.output_type
         
 
-def process_case( (path, fcn, options, preview, img_file) ): #{
+def process_case(args_tuple): #{
     """ Wrapper to facilitate multi-thread implementation
     """
+    (path, fcn, options, preview, img_file) = args_tuple
     fcn( path, preview=preview, img_file=img_file )
     # move source file to done folder (keeping folder heirarchy)
     remaining = os.path.dirname(path)
@@ -337,7 +395,7 @@ def process_case( (path, fcn, options, preview, img_file) ): #{
 
     dest_path = os.path.join('done', path.split(folder+'/')[1])
     if preview:
-        print "MOVE:", path, '-->\n     ', dest_path
+        print("MOVE:", path, '-->\n     ', dest_path)
     else:
         dest_folder = os.path.dirname(dest_path)
         try:
@@ -357,10 +415,10 @@ def main(args): #{
 
     num_cpus = MP.cpu_count()    
     num_jobs = max(num_cpus + jobs_adjustment, 1)    # minimum of at least 1 job
-    print
-    print "Num CPUs detected:", num_cpus
-    print "Num jobs to use  :", num_jobs
-    print
+    print()
+    print("Num CPUs detected:", num_cpus)
+    print("Num jobs to use  :", num_jobs)
+    print()
 
     start_time = time.time()
 
@@ -369,7 +427,7 @@ def main(args): #{
         '2wav'  : FuncWrapper(to_wav, 'wav'),
         '2flac' : FuncWrapper(to_flac, 'flac'),
         }
-    src_folders = conv_fcn_lut.keys()
+    src_folders = list(conv_fcn_lut.keys())
 
     cases = []
     for folder in src_folders:
@@ -384,12 +442,12 @@ def main(args): #{
                     img_file = img_list[0] if ( len( img_list ) > 0 ) else None
                     cases.append( (f, fcn, None, command=='preview', img_file) )
                     f_count += 1
-            print f_count, "files from folder", "(%s)"%folder, "to be converted to", fcn.get_output_type()
+            print(f_count, "files from folder", "(%s)"%folder, "to be converted to", fcn.get_output_type())
 
     if command=='preview':
         USE_MULTIPLE_THREADS = False
 
-    print
+    print()
     if USE_MULTIPLE_THREADS:
         pool = ThreadPool(num_jobs)
         pool.map(process_case, cases)
@@ -400,15 +458,16 @@ def main(args): #{
             process_case(case)
 
     end_time = time.time()
-    print
-    print "Time taken: %.1f seconds" % (end_time - start_time)
+    print()
+    print("Time taken: %.1f seconds" % (end_time - start_time))
 #}
 
 if __name__ == '__main__' : #{
     parser = argparse.ArgumentParser()
 
-    parser.add_argument( "command", help="[go|preview]" )
-    parser.add_argument( "-ja",  "--jobs_adjustment", help="adjustment to default number of jobs", type=int, default=0 )
+    parser.add_argument("command", help="[go|preview]")
+    parser.add_argument("-ja",  "--jobs_adjustment", type=int, default=0, 
+                        help="adjustment to default number of jobs (default=0)")
 
     args = parser.parse_args()
     main(args)
